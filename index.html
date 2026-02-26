@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShopPro Store</title>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Arial;}
+body{background:#f1f3f6;}
+
+/* HEADER */
+header{
+    background:#131921;
+    color:white;
+    display:flex;
+    align-items:center;
+    padding:10px 20px;
+}
+.logo{
+    color:#ff9900;
+    font-size:22px;
+    font-weight:bold;
+    margin-right:20px;
+}
+.search-box{
+    flex:1;
+    display:flex;
+}
+.search-box input{
+    width:100%;
+    padding:8px;
+    border:none;
+}
+.search-box button{
+    background:#febd69;
+    border:none;
+    padding:8px 15px;
+    cursor:pointer;
+}
+.cart-icon{
+    position:relative;
+    cursor:pointer;
+    margin-left:20px;
+}
+.cart-count{
+    position:absolute;
+    top:-6px;
+    right:-10px;
+    background:red;
+    color:white;
+    font-size:12px;
+    padding:2px 6px;
+    border-radius:50%;
+}
+
+/* PRODUCTS */
+.products{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:20px;
+    padding:20px;
+}
+.card{
+    background:white;
+    padding:15px;
+    border-radius:6px;
+    text-align:center;
+}
+.card img{
+    width:100%;
+    height:180px;
+    object-fit:cover;
+}
+.card button{
+    margin-top:8px;
+    padding:6px 12px;
+    background:#ffd814;
+    border:none;
+    cursor:pointer;
+}
+
+/* CART PANEL */
+.overlay{
+    position:fixed;
+    top:0;left:0;
+    width:100%;height:100%;
+    background:rgba(0,0,0,0.5);
+    display:none;
+}
+.overlay.active{display:block;}
+
+.cart-panel{
+    position:fixed;
+    right:-400px;
+    top:0;
+    width:350px;
+    height:100%;
+    background:white;
+    padding:15px;
+    transition:0.3s;
+    overflow-y:auto;
+}
+.cart-panel.active{right:0;}
+
+.cart-item{
+    border-bottom:1px solid #ddd;
+    padding:10px 0;
+}
+.cart-item button{
+    margin:3px;
+    padding:3px 7px;
+    border:none;
+    cursor:pointer;
+}
+.qty-btn{background:#ddd;}
+.remove-btn{background:red;color:white;}
+.total{
+    font-weight:bold;
+    margin-top:10px;
+}
+.checkout-btn{
+    width:100%;
+    margin-top:10px;
+    padding:8px;
+    background:green;
+    color:white;
+    border:none;
+    cursor:pointer;
+}
+
+/* CHECKOUT MODAL */
+.modal{
+    position:fixed;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    background:white;
+    padding:20px;
+    width:300px;
+    display:none;
+}
+.modal.active{display:block;}
+.modal input{
+    width:100%;
+    padding:6px;
+    margin:6px 0;
+}
+.modal button{
+    width:100%;
+    padding:7px;
+    margin-top:5px;
+}
+</style>
+</head>
+<body>
+
+<header>
+    <div class="logo">ShopPro</div>
+
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search products...">
+        <button onclick="searchProducts()">Search</button>
+    </div>
+
+    <div class="cart-icon" onclick="toggleCart()">
+        🛒 Cart
+        <span class="cart-count" id="cartCount">0</span>
+    </div>
+</header>
+
+<div class="products" id="productList"></div>
+
+<div class="overlay" id="overlay" onclick="toggleCart()"></div>
+
+<div class="cart-panel" id="cartPanel">
+    <div style="display:flex;justify-content:space-between;">
+        <h3>Your Cart</h3>
+        <button onclick="toggleCart()" style="border:none;background:none;font-size:18px;">✖</button>
+    </div>
+    <div id="cartItems"></div>
+    <div class="total" id="totalPrice"></div>
+    <button class="checkout-btn" onclick="openCheckout()">Checkout</button>
+</div>
+
+<div class="modal" id="checkoutModal">
+    <h3>Checkout</h3>
+    <input type="text" id="custName" placeholder="Full Name">
+    <input type="text" id="custAddress" placeholder="Address">
+    <button onclick="placeOrder()">Place Order</button>
+    <button onclick="closeCheckout()">Cancel</button>
+</div>
+
+<script>
+const products=[
+{id:1,name:"Sticker Set 1.20",price:12,image:"https://images.unsplash.com/photo-1511707171634-5f897ff02aa9"},
+{id:2,name:"sticker Set 1.21",price:89,image:"https://images.unsplash.com/photo-1517336714731-489689fd1ca8"},
+{id:3,name:"Headphones",price:99,image:"https://images.unsplash.com/photo-1580910051074-3eb694886505"},
+{id:4,name:"T-Shirt",price:29,image:"https://images.unsplash.com/photo-1521572163474-6864f9cf17ab"},
+{id:5,name:"Sneakers",price:79,image:"https://images.unsplash.com/photo-1528701800489-20be3c8c1d1a"}
+];
+
+let cart=JSON.parse(localStorage.getItem("cart"))||[];
+
+function displayProducts(list){
+    const container=document.getElementById("productList");
+    container.innerHTML="";
+    list.forEach(p=>{
+        container.innerHTML+=`
+        <div class="card">
+            <img src="${p.image}">
+            <h3>${p.name}</h3>
+            <p>₹${p.price}</p>
+            <button onclick="addToCart(${p.id})">Add to Cart</button>
+        </div>`;
+    });
+}
+
+function addToCart(id){
+    const product=products.find(p=>p.id===id);
+    const existing=cart.find(i=>i.id===id);
+    if(existing){existing.qty++;}
+    else{cart.push({...product,qty:1});}
+    updateCart();
+}
+
+function updateCart(){
+    localStorage.setItem("cart",JSON.stringify(cart));
+    document.getElementById("cartCount").innerText=
+        cart.reduce((a,b)=>a+b.qty,0);
+
+    const cartItems=document.getElementById("cartItems");
+    cartItems.innerHTML="";
+    let total=0;
+
+    cart.forEach(item=>{
+        total+=item.price*item.qty;
+        cartItems.innerHTML+=`
+        <div class="cart-item">
+            ${item.name} - ₹${item.price} x ${item.qty}
+            <div>
+                <button class="qty-btn" onclick="changeQty(${item.id},1)">+</button>
+                <button class="qty-btn" onclick="changeQty(${item.id},-1)">-</button>
+                <button class="remove-btn" onclick="removeItem(${item.id})">Remove</button>
+            </div>
+        </div>`;
+    });
+
+    document.getElementById("totalPrice").innerText="Total: $"+total;
+}
+
+function changeQty(id,amount){
+    const item=cart.find(i=>i.id===id);
+    if(!item)return;
+    item.qty+=amount;
+    if(item.qty<=0)cart=cart.filter(i=>i.id!==id);
+    updateCart();
+}
+
+function removeItem(id){
+    cart=cart.filter(i=>i.id!==id);
+    updateCart();
+}
+
+function toggleCart(){
+    document.getElementById("cartPanel").classList.toggle("active");
+    document.getElementById("overlay").classList.toggle("active");
+}
+
+function searchProducts(){
+    const val=document.getElementById("searchInput").value.toLowerCase();
+    displayProducts(products.filter(p=>p.name.toLowerCase().includes(val)));
+}
+
+function openCheckout(){
+    if(cart.length===0){alert("Cart is empty");return;}
+    document.getElementById("checkoutModal").classList.add("active");
+}
+
+function closeCheckout(){
+    document.getElementById("checkoutModal").classList.remove("active");
+}
+
+function placeOrder(){
+
+    let name=document.getElementById("custName").value.trim();
+    let address=document.getElementById("custAddress").value.trim();
+
+    if(name===""||address===""){
+        alert("Please fill all details");
+        return;
+    }
+
+    let total=0;
+    let message="🛒 *New Order*%0A%0A";
+
+    cart.forEach(item=>{
+        total+=item.price*item.qty;
+        message+=`${item.name} x ${item.qty} = ₹${item.price*item.qty}%0A`;
+    });
+
+    message+=`%0A*Total:* ₹${total}%0A`;
+    message+=`%0A👤 Name: ${name}%0A🏠 Address: ${address}`;
+
+    // 🔴 PUT YOUR WHATSAPP NUMBER HERE (with country code, no +)
+    let phoneNumber="7005935588";
+
+    let url=`https://wa.me/${phoneNumber}?text=${message}`;
+    window.open(url,"_blank");
+
+    cart=[];
+    updateCart();
+    closeCheckout();
+    toggleCart();
+}
+
+displayProducts(products);
+updateCart();
+</script>
+
+</body>
+</html>
